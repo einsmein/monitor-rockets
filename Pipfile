@@ -5,10 +5,12 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-uvicorn = "*"
 pydantic = "*"
+redis = "*"
+uvicorn = "*"
 
 [dev-packages]
 black = "*"
 pylint = "*"
 pytest = "*"
+requests = "*"
