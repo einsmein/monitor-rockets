@@ -43,9 +43,8 @@ class Packet(BaseModel):
 
 
 class Rocket(BaseModel):
-    type: str = None
+    type: str = ""
     speed: int = 0
-    mission: str = None
-    exploded_reason: str = None
-    processed_msg_num: set = set()
-    latest_update: datetime = None
+    mission: str = ""
+    exploded_reason: str = ""
+    latest_update: str = ""

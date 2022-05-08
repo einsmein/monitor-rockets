@@ -1,3 +1,4 @@
+import os
 from unittest.mock import MagicMock
 from datetime import datetime
 
@@ -6,12 +7,13 @@ from fastapi.responses import Response
 from fastapi.testclient import TestClient
 
 from src import app, schemas
+from src.backend import store
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def test_client():
 
-    return TestClient(app.create_app(), raise_server_exceptions=False)
+    return TestClient(app.APP)
 
 
 def test_message_launched(test_client):
@@ -62,7 +64,7 @@ def test_get_state(test_client):
     assert rocket["type"] == "TEST-ROCKET"
     assert rocket["speed"] == 100
     assert rocket["mission"] == "test_mission"
-    assert 1 in rocket["processed_msg_num"]
+    assert store.is_processed("rocket-foo", 1)
 
 
 def test_message_speed_increased(test_client):
@@ -112,36 +114,72 @@ def test_message_processing_is_atomic(test_client, monkeypatch):
         def add(self, *args):
             raise Exception("mocking some exception")
 
-    monkeypatch.setattr("src.app.rockets", {"rocket-to-fail": schemas.Rocket(
-        processed_msg_num=MockSet()
-    )})
-
-    r = test_client.post(
-        "/messages",
-        json={
-            "metadata": {
-                "channel": "rocket-to-fail",
-                "messageNumber": 1,
-                "messageTime": str(datetime.now()),
-                "messageType": "RocketLaunched",
-            },
-            "message": {
-                "type": "TEST-ROCKET",
-                "launchSpeed": 100,
-                "mission": "test_mission",
-            },
-        },
+    monkeypatch.setattr(
+        "src.app.store._processed_message_num",
+        {"rocket-to-fail": MockSet()},
     )
-    assert not r.ok
-    assert r.status_code == 500
-    assert "mocking some exception" in r.content.decode("utf-8")
+
+    with pytest.raises(Exception):
+        r = test_client.post(
+            "/messages",
+            json={
+                "metadata": {
+                    "channel": "rocket-to-fail",
+                    "messageNumber": 1,
+                    "messageTime": str(datetime.now()),
+                    "messageType": "RocketLaunched",
+                },
+                "message": {
+                    "type": "TEST-ROCKET",
+                    "launchSpeed": 100,
+                    "mission": "test_mission",
+                },
+            },
+        )
 
     r = test_client.get("/state/rocket-to-fail")
     assert r.ok
 
     rocket = r.json()
-    assert rocket["type"] is None
+    assert rocket["type"] is ""
     assert rocket["speed"] == 0
-    assert rocket["mission"] == None
-    assert 1 not in rocket["processed_msg_num"]
+    assert rocket["mission"] == ""
+    assert not store.is_processed("rocket-to-fail", 1)
 
+
+def test_message_exploded(test_client):
+    r = test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-foo",
+                "messageNumber": 5,
+                "messageTime": str(datetime.now()),
+                "messageType": "RocketExploded",
+            },
+            "message": {"reason": "not_enough_nutrient"},
+        },
+    )
+    assert r.status_code == 200
+
+    rocket = r.json()
+    assert rocket.get("exploded_reason") == "not_enough_nutrient"
+
+
+def test_message_mission_changed(test_client):
+    r = test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-foo",
+                "messageNumber": 4,
+                "messageTime": str(datetime.now()),
+                "messageType": "RocketMissionChanged",
+            },
+            "message": {"newMission": "find_eagle"},
+        },
+    )
+    assert r.status_code == 200
+
+    rocket = r.json()
+    assert rocket.get("mission") == "find_eagle"
