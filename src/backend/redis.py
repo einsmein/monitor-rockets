@@ -1,87 +1,99 @@
 """
-Redis backend
-
-Status of rockets: Hashmap
-"<channel>":
-  {"type": str, "speed": int, "exploded_reason": str, "mission": str, "latest_update": str}
-
-Processed messages: Sets
-"<channel>-processed": set()
-
-Channels: Sets
-"channels": set()
-
+Redis store
 """
-from src import schemas
+
+from contextlib import contextmanager
+from datetime import datetime
+
 from redis import Redis
 
+from src import schemas
 
 _redis = Redis(host="localhost", port=6379, decode_responses=True)
 
 
 def _get_processed_cache_key(channel):
+    """Get redis key that keeps processed message number for a given `channel`"""
     return f"{channel}-processed"
 
 
-def get_channels():
-    return _redis.smembers("channels")
-
-
-def get(channel):
-    _redis.sadd("channels", channel)
-    rocket = schemas.Rocket(**_redis.hgetall(channel))
-    print(rocket)
-    raise
-    return rocket
-
-def is_processed(channel: str, message_number: int):
-    return _redis.sismember(_get_processed_cache_key(channel), message_number)
-
-def process_message_launched(
-    rocket: schemas.Rocket,
-    metadata: schemas.MessageMetadata,
-    message: schemas.MessageType.RocketLaunched,
-):
-    rocket.type, rocket.speed, rocket.mission, rocket.latest_update = (
-        message.type,
-        rocket.speed + message.launchSpeed,
-        message.mission,
-        metadata.messageTime.isoformat(),
-    )
-
+@contextmanager
+def _process_message(metadata):
+    """
+    Context manager to process a message as transactions,
+    update channel's latest update timestamp and processed message numbers
+    """
     pipe = _redis.pipeline()
-    pipe.hmset(metadata.channel, rocket.dict())
+    yield pipe
+    pipe.hmset(
+        "latest_update_timestamp", {metadata.channel: metadata.messageTime}
+    )
     pipe.sadd(_get_processed_cache_key(metadata.channel), metadata.messageNumber)
     pipe.execute()
 
 
-def process_message_speed_increased(
-    rocket: schemas.Rocket,
-    metadata: schemas.MessageMetadata,
-    message: schemas.MessageType.RocketSpeedIncreased,
-):
-    pass
+def get_channels():
+    """
+    Get all channels. The result is sorted by latest update
+    timestamp in an ascending order.
+    """
+    latest = _redis.hgetall("latest_update_timestamp")
+    print(latest)
+    return [
+        k for k, v in sorted(latest.items(), key=lambda i: datetime.fromisoformat(i[1]))
+    ]
 
 
-def process_message_speed_decreased(
-    rocket: schemas.Rocket,
-    metadata: schemas.MessageMetadata,
-    message: schemas.MessageType.RocketSpeedIncreased,
-):
-    pass
+def get(channel: str):
+    """Get state of a rocket on the given `channel`"""
+    timestamp = _redis.hmget("latest_update_timestamp", channel)[0]
+    rocket = schemas.Rocket(latest_update=timestamp or "", **_redis.hgetall(channel))
+    return rocket
 
 
-def process_message_exploded(
-    rocket: schemas.Rocket,
-    metadata: schemas.MessageMetadata,
-    message: schemas.MessageType.RocketSpeedIncreased,
-):
-    pass
+def is_processed(channel: str, message_number: int):
+    """Check if the message with number `message_num` on the given channel has been processed"""
+    return _redis.sismember(_get_processed_cache_key(channel), message_number)
 
 
-def process_message_mission_changed(
-    rocket: schemas.Rocket,
-    metadata: schemas.MessageMetadata,
-    message: schemas.MessageType.RocketSpeedIncreased,
-):
-    pass
+def update_type(metadata: schemas.MessageMetadata, rocket_type: str):
+    with _process_message(metadata) as pipe:
+        pipe.hmset(
+            metadata.channel,
+            {
+                "type": rocket_type,
+            },
+        )
+
+
+def update_speed(metadata: schemas.MessageMetadata, speed: int):
+    rocket = get(metadata.channel)
+    with _process_message(metadata) as pipe:
+        pipe.hmset(
+            metadata.channel,
+            {
+                "speed": rocket.speed + speed,
+            },
+        )
+
+
+def update_exploded_reason(metadata: schemas.MessageMetadata, reason: str):
+    with _process_message(metadata) as pipe:
+        pipe.hmset(
+            metadata.channel,
+            {
+                "exploded_reason": reason,
+                "latest_exploded_msg": metadata.messageNumber,
+            },
+        )
+
+
+def update_mission(metadata: schemas.MessageMetadata, mission: str):
+    with _process_message(metadata) as pipe:
+        pipe.hmset(
+            metadata.channel,
+            {
+                "mission": mission,
+                "latest_mission_msg": metadata.messageNumber,
+            },
+        )

@@ -1,6 +1,6 @@
 import os
 
-backend = os.getenv("STORE_BACKEND", "redis")
+backend = os.getenv("STORE_BACKEND", "memory")
 if backend == "redis":
     import src.backend.redis as store
 elif backend == "memory":

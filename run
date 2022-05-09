@@ -1,18 +1,13 @@
 usage () {
-    echo "run [-r]"
+    echo "run [OPTIONS] [uvicorn options]"
     echo "Options:"
     echo "  -r      Use Redis as application data store."
     echo "          If not set, data is store in-memory."
     echo "  -h      Display this help message."
 }
 
-if [ $# -gt 1 ]; then
-  usage
-  exit 1
-fi
-
 STORE_BACKEND=memory
-while getopts "rh" options; do
+while getopts ":rh" options; do
     case "${options}" in
       r)
         STORE_BACKEND=redis
@@ -22,14 +17,12 @@ while getopts "rh" options; do
         exit 0
         ;;
       *)
-        usage
-        exit 1
-        ;;
+        break
     esac
     shift
 done 
 
-if [ $STORE_BACKEND=="redis" ]; then
-  docker run --name redis -p 6379:6379 -d redis:latest
+if [ $STORE_BACKEND = "redis" ]; then
+  docker run --rm --name redis -p 6379:6379 -d redis:latest
 fi
-STORE_BACKEND=$STORE_BACKEND uvicorn src.app:APP
+STORE_BACKEND=$STORE_BACKEND uvicorn src.app:APP $@

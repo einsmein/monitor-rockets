@@ -1,6 +1,6 @@
 import os
-from unittest.mock import MagicMock
 from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.responses import Response
@@ -84,6 +84,7 @@ def test_message_speed_increased(test_client):
     )
     assert r.status_code == 200
 
+    r = test_client.get("/state/rocket-foo")
     rocket = r.json()
     assert rocket.get("speed") == 1100
 
@@ -105,6 +106,7 @@ def test_message_speed_decreased(test_client):
     )
     assert r.status_code == 200
 
+    r = test_client.get("/state/rocket-foo")
     rocket = r.json()
     assert rocket.get("speed") == 1050
 
@@ -138,13 +140,8 @@ def test_message_processing_is_atomic(test_client, monkeypatch):
         )
 
     r = test_client.get("/state/rocket-to-fail")
-    assert r.ok
-
-    rocket = r.json()
-    assert rocket["type"] is ""
-    assert rocket["speed"] == 0
-    assert rocket["mission"] == ""
-    assert not store.is_processed("rocket-to-fail", 1)
+    assert not r.ok
+    assert r.status_code == 404
 
 
 def test_message_exploded(test_client):
@@ -162,6 +159,7 @@ def test_message_exploded(test_client):
     )
     assert r.status_code == 200
 
+    r = test_client.get("/state/rocket-foo")
     rocket = r.json()
     assert rocket.get("exploded_reason") == "not_enough_nutrient"
 
@@ -181,5 +179,48 @@ def test_message_mission_changed(test_client):
     )
     assert r.status_code == 200
 
+    r = test_client.get("/state/rocket-foo")
     rocket = r.json()
     assert rocket.get("mission") == "find_eagle"
+
+
+def test_get_channels_sort_by_latest_update(test_client):
+    test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-1",
+                "messageNumber": 1,
+                "messageTime": "2021-05-09T20:39:51.756997",
+                "messageType": "RocketMissionChanged",
+            },
+            "message": {"newMission": "some_mission"},
+        },
+    )
+    test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-2",
+                "messageNumber": 1,
+                "messageTime": "2021-04-09T20:39:51.756997",
+                "messageType": "RocketMissionChanged",
+            },
+            "message": {"newMission": "some_mission"},
+        },
+    )
+    test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-3",
+                "messageNumber": 1,
+                "messageTime": "2021-03-09T20:39:51.756997",
+                "messageType": "RocketMissionChanged",
+            },
+            "message": {"newMission": "some_mission"},
+        },
+    )
+    r = test_client.get("/list")
+    rockets = r.json()
+    assert rockets[:3] == ["rocket-3", "rocket-2", "rocket-1"]

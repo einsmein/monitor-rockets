@@ -1,8 +1,6 @@
-from enum import Enum
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class MessageType:
@@ -27,7 +25,7 @@ class MessageType:
 class MessageMetadata(BaseModel):
     channel: str
     messageNumber: int
-    messageTime: datetime
+    messageTime: str
     messageType: Literal[
         MessageType.RocketLaunched.__name__,
         MessageType.RocketSpeedIncreased.__name__,
@@ -37,14 +35,16 @@ class MessageMetadata(BaseModel):
     ]
 
 
-class Packet(BaseModel):
-    metadata: MessageMetadata
-    message: dict
-
-
 class Rocket(BaseModel):
+    """
+    Schema of rocket state.
+    `lastest_mission_msg` is the latest RocketMissionChanged message number.
+    `lastest_exploded_msg` is the latest RocketExploeded message number.
+    """
     type: str = ""
     speed: int = 0
     mission: str = ""
     exploded_reason: str = ""
+    latest_mission_msg: int = -1
+    latest_exploded_msg: int = -1
     latest_update: str = ""

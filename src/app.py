@@ -6,6 +6,9 @@ from fastapi.responses import Response
 from src import schemas
 from src.backend import store
 
+logging.basicConfig(filename="server.log", level=logging.INFO)
+
+
 def create_app():
     app = fastapi.FastAPI()
 
@@ -13,10 +16,10 @@ def create_app():
     async def root():
         return "Hello Moon!"
 
-    @app.post("/messages", response_model=schemas.Rocket)
+    @app.post("/messages")
     async def receive_message(metadata: schemas.MessageMetadata, message: dict):
+        logging.info({"metadata": metadata, "message": message})
 
-        logging.error({"metadata": metadata, "message": message})
         rocket = store.get(metadata.channel)
 
         if rocket and store.is_processed(metadata.channel, metadata.messageNumber):
@@ -25,25 +28,32 @@ def create_app():
         message = getattr(schemas.MessageType, metadata.messageType)(**message)
 
         if isinstance(message, schemas.MessageType.RocketLaunched):
-            store.process_message_launched(rocket, metadata, message)
+            store.update_type(metadata, message.type)
+            if rocket.latest_mission_msg < metadata.messageNumber:
+                store.update_mission(metadata, message.mission)
+            store.update_speed(metadata, message.launchSpeed)
 
         if isinstance(message, schemas.MessageType.RocketSpeedIncreased):
-            store.process_message_speed_increased(rocket, metadata, message)
+            store.update_speed(metadata, message.by)
 
         if isinstance(message, schemas.MessageType.RocketSpeedDecreased):
-            store.process_message_speed_decreased(rocket, metadata, message)
+            store.update_speed(metadata, -message.by)
 
         if isinstance(message, schemas.MessageType.RocketExploded):
-            store.process_message_exploded(rocket, metadata, message)
+            if rocket.latest_exploded_msg < metadata.messageNumber:
+                store.update_exploded_reason(metadata, message.reason)
 
         if isinstance(message, schemas.MessageType.RocketMissionChanged):
-            store.process_message_mission_changed(rocket, metadata, message)
+            if rocket.latest_mission_msg < metadata.messageNumber:
+                store.update_mission(metadata, message.newMission)
 
-        # return rocket
-
-    @app.get("/state/{channel}")
+    @app.get("/state/{channel}", response_model=schemas.Rocket)
     async def get_rocket_state(channel: str):
-        return store.get(channel)
+        rocket = store.get(channel)
+        if not rocket.latest_update:
+            return Response(f"No state is received on channel '{channel}'.", status_code=404)
+        return rocket
+
 
     @app.get("/list")
     async def list_all_channels():
