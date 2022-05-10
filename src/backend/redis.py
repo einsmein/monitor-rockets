@@ -25,9 +25,7 @@ def _process_message(metadata):
     """
     pipe = _redis.pipeline()
     yield pipe
-    pipe.hmset(
-        "latest_update_timestamp", {metadata.channel: metadata.messageTime}
-    )
+    pipe.hmset("latest_update_timestamp", {metadata.channel: metadata.messageTime})
     pipe.sadd(_get_processed_cache_key(metadata.channel), metadata.messageNumber)
     pipe.execute()
 
@@ -38,9 +36,11 @@ def get_channels():
     timestamp in an ascending order.
     """
     latest = _redis.hgetall("latest_update_timestamp")
-    print(latest)
     return [
-        k for k, v in sorted(latest.items(), key=lambda i: datetime.fromisoformat(i[1]))
+        channel
+        for channel, latest_update in sorted(
+            latest.items(), key=lambda t: datetime.fromisoformat(t[1])
+        )
     ]
 
 

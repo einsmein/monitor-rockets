@@ -41,6 +41,7 @@ class Rocket(BaseModel):
     `lastest_mission_msg` is the latest RocketMissionChanged message number.
     `lastest_exploded_msg` is the latest RocketExploeded message number.
     """
+
     type: str = ""
     speed: int = 0
     mission: str = ""

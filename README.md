@@ -2,8 +2,9 @@
 
 ## Quickstart
 
-Run `pipenv install --sync` to install required python packages and
-call `./run`. Use an option `-r` to use redis as a storage backend.
+Run `pipenv sync` to install required python packages and call `./run`.  
+Use an option `-r` to use redis as a storage backend. 
+This option requires that you have docker installed.
 
 ## Implementation summary
 
@@ -24,7 +25,7 @@ In other words, it will return the state that it believe the rocket is in
 according to the messages it has processed. 
 _An alternative would be to return the exact knowledge, meaning that the application
 only returns information collected from messages in-order.
-Messages that arrive out of order can be cached in a min-heap, and get processed when the
+Messages that arrive out of order can be stored in a min-heap, and get processed when the
 missing messages arrive._
 
 ### Store backend
@@ -53,7 +54,7 @@ One solution is to keep track of the highest number of a complete sequence,
 and discard everything below that number. For example, if messages (1,2,3,4,6,7,...) has been processed,
 then we only store (4,6,7,...). We can then ignore any message with number <= 4._
 
-3. **Timestamp of latest update** for all channel is saved as one entry with the key
+3. **Timestamp of latest update** for all channels are saved as one entry with the key
 `latest_update_timestamp`. It is a value within a hash whose fields are channel names.
 ```
 "latest_update_timestamp": {"<channel>": "<latest_update_timestamp>"}

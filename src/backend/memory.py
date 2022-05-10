@@ -16,9 +16,9 @@ def get_channels():
     timestamp in an ascending order.
     """
     return [
-        k
-        for k, v in sorted(
-            _rockets.items(), key=lambda i: datetime.fromisoformat(i[1].latest_update)
+        channel
+        for channel, rocket in sorted(
+            _rockets.items(), key=lambda t: datetime.fromisoformat(t[1].latest_update)
         )
     ]
 

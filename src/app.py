@@ -51,9 +51,10 @@ def create_app():
     async def get_rocket_state(channel: str):
         rocket = store.get(channel)
         if not rocket.latest_update:
-            return Response(f"No state is received on channel '{channel}'.", status_code=404)
+            return Response(
+                f"No state is received on channel '{channel}'.", status_code=404
+            )
         return rocket
-
 
     @app.get("/list")
     async def list_all_channels():
