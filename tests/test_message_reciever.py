@@ -150,7 +150,7 @@ def test_message_exploded(test_client):
         json={
             "metadata": {
                 "channel": "rocket-foo",
-                "messageNumber": 5,
+                "messageNumber": 6,
                 "messageTime": str(datetime.now()),
                 "messageType": "RocketExploded",
             },
@@ -162,6 +162,27 @@ def test_message_exploded(test_client):
     r = test_client.get("/state/rocket-foo")
     rocket = r.json()
     assert rocket.get("exploded_reason") == "not_enough_nutrient"
+
+
+def test_message_exploded_not_overwritten(test_client):
+    r = test_client.post(
+        "/messages",
+        json={
+            "metadata": {
+                "channel": "rocket-foo",
+                "messageNumber": 5,
+                "messageTime": str(datetime.now()),
+                "messageType": "RocketExploded",
+            },
+            "message": {"reason": "unknown"},
+        },
+    )
+    assert r.status_code == 200
+
+    r = test_client.get("/state/rocket-foo")
+    rocket = r.json()
+    assert rocket.get("exploded_reason") == "not_enough_nutrient"
+
 
 
 def test_message_mission_changed(test_client):

@@ -57,9 +57,10 @@ def update_speed(metadata: schemas.MessageMetadata, speed: int):
 
 def update_exploded_reason(metadata: schemas.MessageMetadata, reason: str):
     rocket = get(metadata.channel)
-    rocket.exploded_reason, rocket.latest_update, _ = (
+    rocket.exploded_reason, rocket.latest_update, rocket.latest_exploded_msg, _ = (
         reason,
         metadata.messageTime,
+        metadata.messageNumber,
         _processed_message_num[metadata.channel].add(metadata.messageNumber),
     )
     _rockets[metadata.channel] = rocket
